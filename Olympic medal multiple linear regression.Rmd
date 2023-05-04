@@ -1,0 +1,531 @@
+
+```{r}
+library("tinytex")
+
+```
+
+## Data Pre Processing 
+Loading required packages
+```{r include=FALSE}
+library(ggplot2)
+#install.packages("ggplot2")
+#install.packages("Metrics")
+library(Metrics)
+library(tidyr)
+library(tidyverse)
+library(dplyr)
+library(broom)
+library(caret)
+#install.packages("boot")
+library(boot)
+
+```
+Reading the CSV file and Converting it into a DataFrame
+```{r}
+data = read.csv("C:\\Users\\anand\\Downloads\\stat_data.csv")
+data_df = data.frame(data)
+```
+Data Pre Processing 
+Check for any null values
+```{r}
+
+is.null(data_df) 
+```
+```{r}
+summary(data_df)
+```
+Distributions of variables 
+
+```{r echo=TRUE}
+p1 <- ggplot(
+  data_df,
+  aes(Population))+
+  geom_histogram(aes(y = ..density..),bins = 10,fill = "Red")+ geom_density()
+
+p2 <-ggplot(
+  data_df,
+  aes(GDP))+
+  geom_histogram(aes(y = ..density..),bins = 10 ,fill = "Blue")+ geom_density()
+
+p3 <-ggplot(
+  data_df,
+  aes(Medal2012))+
+  geom_histogram(aes(y = ..density..),bins = 10,fill = "Green")+ geom_density()
+
+library(patchwork)
+p4 <- p1/p2+p3+plot_annotation(
+  title = "Distribution of Variables"
+)
+
+p4
+
+```
+
+From the above distributions we can infer that data is positively skewed /right skewed distribution. which can impact our predictions and model performance to counter this we will apply transformations to our variables and we will see that in task 2.
+
+###  model 0ne
+```{r}
+
+model = glm(Medal2012 ~ GDP+Population,data = data_df)
+summary(model)
+
+prediction <- fitted(model)
+
+data_df = mutate(data_df,Pred_2016_model_1 = prediction)
+
+
+```
+Plotting the Actual vs Predicted and The axes are  transformed for improving clarity.
+```{r}
+ggplot(
+  data_df,
+  aes( x = sqrt(Medal2016),y = sqrt(Pred_2016_model_1),color = factor(Medal2016))
+  )+geom_point()+geom_abline(color='Green')+
+   ggtitle('Actual vs Predicted medals for 2016 Olympics') +
+  xlab('Actual_2016 medals') +
+  xlim(0.5,5)+
+  ylim(0.5,5)+
+  ylab('Predicted 2016 medals')
+
+```
+The plot of actual values versus predicted values shows how far the predictions are from the actual values. 
+The abline in green represents the coincidence of the actual and predicted values
+
+The ones above the line indicate that for a country, predicted value is higher than the actual value and the ones below the line indicate that the actual is higher than the predicted medal count.
+
+## Evaluating model performance using Correlation , R-Squared and AIC Score
+
+Creating a dataframe to store Evaluation metrics
+
+```{r}
+
+cor = cor(data_df$Pred_2016_model_1,data_df$Medal2016)
+RMSE_model1 = round(RMSE(data_df$Pred_2016_model_1, data_df$Medal2016),5)
+
+
+model_df <- data.frame("Model 1", round(cor^2, 5), round(AIC(model),5), round(BIC(model),5),RMSE_model1)
+names(model_df) <- c('Model', 'R-Squared', 'AIC', 'BIC','RMSE')
+model_df
+
+```
+Log - Transforming the variables
+
+```{r}
+data_df = mutate(data_df,GDP_log = log(GDP))
+data_df = mutate(data_df,population_log = log(Population))
+
+```
+Model Building 
+In this we are transforming the response variable(Medal2012) along with Explanatory variables (GDP,Population) to counter positive skew present in these variables as discussed in Task one.
+
+The correlation is 0.62 if we do not transform the Medal2012.
+
+The reasoning behind transforming the response variable(Medal2012) is that it is showing positive skew.
+
+```{r}
+
+p1 <- ggplot(
+  data_df,
+  aes(population_log))+
+  geom_histogram(aes(y = ..density..),bins = 10,fill = "Red")+ geom_density()
+
+p2 <-ggplot(
+  data_df,
+  aes(GDP_log))+
+  geom_histogram(aes(y = ..density..),bins = 10 ,fill = "Blue")+ geom_density()
+
+p3 <-ggplot(
+  data_df,
+  aes(log(Medal2012)))+
+  geom_histogram(aes(y = ..density..),bins = 10,fill = "Green")+ geom_density()
+
+library(patchwork)
+p4 <- p1+p2+p3+plot_annotation(
+  title = "Distribution of Variables after Transformation"
+)
+
+p4
+
+```
+From the above distributions we can infer that data is distributed symmetrically after log transformations.
+
+Model for Task Two
+
+After Experimenting with transformations we have come to the conclusion that log transforming only Population is far better than transforming both the inputs.When we consider R- squared values as a model selection metric then the former(log transforming only Population) R-squared score is **0.7856409**  as compared to the latter R-squared score of **0.3906** and AIC score is lower for the former model(log transforming only Population).
+
+```{r}
+model_2 <- glm(data_df$Medal2012~ GDP+population_log, data = data_df)
+summary(model_2)
+```
+Model Fitting 
+```{r}
+
+prediction <- fitted(model_2)
+data_df <- mutate(data_df,Pred_2016_model_2 = (prediction))
+
+```
+
+Plotting the Actual vs Predicted and The axes are  transformed for improving clarity.
+```{r}
+ggplot(
+  data_df,
+  aes( x = log(Medal2016),y = log(Pred_2016_model_2),color = factor(Medal2016))
+  )+geom_point()+geom_abline(color='Green')+
+   ggtitle('Actual vs Predicted medals for 2016 Olympics using Log Transformed variables') +
+  xlab('Actual_2016 medals') +
+ 
+  ylab('Predicted 2016 medals')
+
+```
+
+The plot of actual values versus predicted values shows how far the predictions are from the actual values. 
+The abline in green represents the coincidence of the actual and predicted values
+
+The ones above the line indicate that for a country, predicted value is higher than the actual value and the ones below the line indicate that the actual is higher than the predicted medal count.
+
+In this model the data points are mostly around the abline so we can expect that RMSE will be lower for this model.
+
+
+## Evaluating model performance for log transformed model using R-Squared,AIC value,BIC value,RMSE.
+
+```{r}
+
+cor_2 = cor(data_df$Medal2016,data_df$Pred_2016_model_2)
+
+RMSE_model2 = round(RMSE(data_df$Pred_2016_model_2, data_df$Medal2016),5)
+
+model_df <- rbind(model_df, c("Model 2_Transformed", round(cor_2^2, 5), round(AIC(model_2),5), round(BIC(model_2),5),RMSE_model2))
+
+model_df
+```
+
+##Selecting best model:
+
+Model_2 (Log transformed ) is better model than in task 1 model.The Reasons are:
+
+AIC Scores: Akaike information criterion (AIC) is an estimator of prediction error.For model in Task 1 score is  **553.187**  where as in Model_2 (log transformed) the score is **551.489 **.so we select the model with lowest prediction error and by  Model_2 is the best.
+
+BIC Scores: It is based on the likelihood function and it is closely related to the Akaike information criterion (AIC).For model in Task 1 score is  **562.2377**  where as in Model_2 (log transformed) the score is **560.5397**.so we select the model with lowest BIC score and by Model_2 is the best.
+
+
+R-Squared value: it measures the goodness of fit of a model.The values of model in task 1 is **0.7798** and in Model_2 (log transformed) the score is **0.78564  **.The **Higher** the value the better the performance of model
+
+
+RMSE: This measures the average error performed by the model in predicting the outcome for an observation. The value of model_1 is **9.11259** and of model_2 transformed is **8.98978**.The **lower** the value the better the performance of model
+
+So,based on the above statistical evidences we can say that model_2 (Log transformed) is the best model.
+
+
+
+
+# Performing k means clustering
+
+Installing required packages for performing Kmeans Clustering.
+
+```{r}
+library(broom)
+#clustering 
+#install.packages("NbClust")
+library(NbClust)
+library(cluster)
+require(factoextra)
+
+```
+
+
+Prepare the data for clustering - we will be doing scaling on the data.
+
+Reasons:
+
+(i) By scaling the variables to have the same mean and standard deviation, we ensure that all variables contribute equally to the distance calculation. This improves the robustness and accuracy of the clustering algorithm.
+
+(ii) Another Reasoning being k-means clustering algorithm is sensitive to the scale of the variables.
+
+```{r}
+scaled_data <- as.data.frame(scale(data_df[,c(2,9)]))
+# In our data frame columns 8 and 9 are log transformed inputs 
+head(data_df[,c(1,2,9)],3)
+```
+
+To determine the optimal number of clusters we will be using the NbClust package in R.
+
+we will be using **Elbow method** one of popular method determining the optimal number of clusters in a data set for k-means clustering. It is a simple and intuitive method that involves plotting the within-cluster sum of squares (WSS) against the number of clusters and looking for a "bend" or "elbow" in the plot.
+
+WSS is measure of variance and it decreases as number of clusters increases but we should be vary of over fitting problem.so we need to strike balance variance and over fitting this can be achieved by using elbow method.
+
+```{r}
+fviz_nbclust(data_df[,c(2,9)], kmeans, method = "wss") +
+  geom_vline(xintercept = 4, linetype = 2)+
+  labs(subtitle = "Elbow method")
+
+kmeans_result <- kmeans(scaled_data, centers = 4)
+
+
+```
+
+```{r}
+kmeans_result$size
+```
+
+Adding the clusters to respective data points using mutate function so that later we can access them easily
+
+```{r}
+data_df <- mutate(data_df,cluster = kmeans_result$cluster )
+head(data_df[,c(1,2,9,11)],5)
+
+```
+
+Visualizing clusters
+The axes are transformed for better clarity and understanding of clusters
+
+```{r}
+fviz_cluster(kmeans_result, data = data_df[8:9])
+
+```
+Model Building 
+
+```{r}
+cluster_assignments = kmeans_result$cluster
+
+
+AIC_clust ={}
+BIC_clust ={}
+
+predictions <- rep(0, 71) # initialize predictions vector
+for (i in 1:4) {
+  # subset the data for the current cluster
+
+  cluster <- data_df %>% filter(cluster == i)
+  
+  # train a linear regression model on the subset of data
+  model_cluster <- glm(Medal2012 ~ GDP+ Population,data = cluster )
+  
+  # make predictions on the subset of data and store in the predictions vector
+  predictions[cluster_assignments == i] <- fitted(model_cluster)
+
+  cat("Evalaution metrics for cluster :",i,"\n")
+  cat("\n","AIC Score", AIC(model_cluster), "\n","\n" 
+    ,"BIC Score:", BIC(model_cluster), "\n","\n"
+    )
+    cat("___________________________________","\n","\n")
+    
+    AIC_clust <- append(AIC_clust,AIC(model_cluster))
+    BIC_clust <- append(BIC_clust,BIC(model_cluster))
+
+
+
+}
+```
+
+
+
+Plotting the Actual vs Predicted and The axes are  transformed for improving clarity.
+
+```{r}
+ggplot(
+  data_df,
+  aes( x = log(Medal2016),y = log(predictions),color = factor(Medal2016))
+  )+geom_point()+geom_abline(color='Green')+
+   ggtitle('Actual vs Predicted medals for 2016 Olympics by Clustering') +
+  xlab('Actual_2016 medals') +
+  xlim(0,5)+
+  ylim(0,5)+
+  ylab('Predicted 2016 medals')
+
+```
+
+The plot of actual values versus predicted values shows how far the predictions are from the actual values. 
+
+The abline in green represents the coincidence of the actual and predicted values
+
+The ones above the line indicate that for a country, predicted value is higher than the actual value and the ones below the line indicate that the actual is higher than the predicted medal count.
+
+In this model the data points are  around the abline so we can expect that RMSE will be lowest out of the 3 models and R Squared will be highest of all.
+
+
+
+## Evaluating model performances using R-Squared,AIC value,BIC value,RMSE.
+
+
+```{r}
+data_df = mutate(data_df,Pred_2016_model_cluster = predictions)
+
+c1 = cor(data_df$Pred_2016_model_cluster,data_df$Medal2016)
+
+RMSE_model3 = round(RMSE(data_df$Pred_2016_model_cluster, data_df$Medal2016),5)
+
+model_df <- rbind(model_df, c("Model 3_Kmeans", round(c1^2, 5), round(AIC(model_cluster),5), round(BIC(model_cluster),5),RMSE_model3))
+
+model_df
+```
+Benefits of This approach :
+
+Relatively simple to implement.
+
+This approach  can capture nonlinear relationships between the inputs and outputs by modeling each cluster with a linear regression model. 
+
+This can provide insights into the structure of the data by identifying groups of inputs that are related to similar outputs.
+
+We can get performance metrics of each and every cluster so that we can finetune the parameters to improve the model.
+
+
+
+
+
+## Model Selection
+
+Model selection is done by considering the following metrics 
+1.Cross validation
+2. RMSE
+3. AIC scores
+4. BIC scores
+5. R-Squared Values
+
+Cross validation:
+
+It involves splitting the available data into a training set and a validation set, where the training set is used to train the model and the validation set is used to test its performance.
+
+Splitting the data into Train and Test.Here we using 50 data points for training and 21 for testing i.e., 70% train and 30% testing 
+
+```{r}
+train_indices <- sample(1:nrow(data_df), size = 50, replace = FALSE)
+train_data <- data_df[train_indices, ]
+test_data <- data_df[-train_indices, ]
+
+```
+
+We will be using the k-fold cross-validation.This involves splitting the data into 5(our value of k=5) equally sized folds, using 4 folds for training and the remaining fold for validation. This process is repeated 5 times, with each fold being used for validation once. The performance metrics are then averaged across all the runs.
+
+we will be calculating the RMSE value.
+
+To do so we will be using the purrr and modelr package in R 
+
+get_pred is a function that takes the models and test data and returns the predictions.
+
+```{r}
+
+#install.packages("purrr")
+library(purrr)
+library(modelr)
+cv  <- crossv_kfold(data_df, k = 5)
+
+model_1  <- map(cv$train, ~glm(Medal2012~ GDP+Population, data = .))
+model_2_transformed  <- map(cv$train, ~glm(Medal2012~ GDP+population_log, data = .))
+
+get_pred  <- function(model, test_data){
+  data  <- as.data.frame(test_data)
+  pred  <- add_predictions(data, model)
+  return(pred)
+}
+
+pred_1  <- map2_df(model_1, cv$test, get_pred, .id = "Run")
+pred_2  <- map2_df(model_2_transformed, cv$test, get_pred, .id = "Run")
+
+rmse_model1 <- RMSE(pred_1$Medal2016,pred_1$pred)
+rmse_model2 <- RMSE(pred_2$Medal2016,pred_2$pred)
+
+
+```
+
+Performing cross validation on clusters
+
+Perform on cross validation on each cluster with 70% train and 30% test data.
+
+
+```{r}
+kmeans_result$size
+
+cluster_1 <- data_df %>% filter(cluster == 1)
+cluster_2 <- data_df %>% filter(cluster == 2)
+cluster_3 <- data_df %>% filter(cluster == 3)
+cluster_4 <- data_df %>% filter(cluster == 4)
+```
+now we will split the data into training sets and testing sets.we will do it for cluster 4 because the data is too small(cluster 4 data = 3 ) to do so
+
+```{r}
+train_indices <- sample(1:nrow(cluster_1), size = 20, replace = FALSE)
+train_data_c1 <- cluster_1[train_indices, ]
+test_data_c1 <- cluster_1[-train_indices, ]
+
+train_indices <- sample(1:nrow(cluster_2), size = 7, replace = FALSE)
+train_data_c2 <- cluster_2[train_indices, ]
+test_data_c2 <- cluster_2[-train_indices, ]
+
+train_indices <- sample(1:nrow(cluster_3), size = 20, replace = FALSE)
+train_data_c3 <- cluster_3[train_indices, ]
+test_data_c3 <- cluster_3[-train_indices, ]
+
+```
+
+
+
+Now we will perform k fold validation and calculate the mean of RMSE 
+
+```{r}
+
+cv_1  <- crossv_kfold(cluster_1, k = 5)
+cv_2  <- crossv_kfold(cluster_2, k = 5)
+cv_3  <- crossv_kfold(cluster_3, k = 5)
+
+
+
+model_c1  <- map(cv_1$train, ~glm(Medal2012~ GDP+Population, data = .))
+model_c2  <- map(cv_2$train, ~glm(Medal2012~ GDP+Population, data = .))
+model_c3  <- map(cv_3$train, ~glm(Medal2012~ GDP+Population, data = .))
+
+
+get_pred  <- function(model, test_data){
+  data  <- as.data.frame(test_data)
+  pred  <- add_predictions(data, model)
+  return(pred)
+}
+
+pred_c1  <- map2_df(model_c1, cv_1$test, get_pred, .id = "Run")
+pred_c2  <- map2_df(model_c2, cv_2$test, get_pred, .id = "Run")
+pred_c3  <- map2_df(model_c3, cv_3$test, get_pred, .id = "Run")
+
+
+rmse_modelc1 <- RMSE(pred_c1$Medal2016,pred_c1$pred)
+rmse_modelc2 <- RMSE(pred_c2$Medal2016,pred_c2$pred)
+rmse_modelc3 <- RMSE(pred_c3$Medal2016,pred_c3$pred)
+
+rmse_model3 <- sum(rmse_modelc1+rmse_modelc2+rmse_modelc3)/3
+model_df$Cross_validation_RMSE <- c(rmse_model1,rmse_model2,rmse_model3)
+
+```
+
+Now selecting the Best model 
+```{r}
+model_df[c(1,5,2,6)]
+```
+From the above values we can draw these conclusions:
+
+if we consider RMSE Model 3_Kmeans has the lowest score of **7.97857**  and when we performed cross validation the Model 3_Kmeans	has again hass the lowest RMSE of **8.313762**.Finally,the R-Squared value of Model 3_Kmeans has the highest value of **0.83054**.
+
+From all these evidences we can infer that Model 3_Kmeans has a better balance between model complexity and goodness of fit.
+
+So,we select Model 3_Kmeans from Task 3 as best one to accurately predict the medal count.
+
+
+
+Model 3_Kmeans Findings:
+
+The K-means algorithm allows us to partition the data into clusters and create linear regression models for each cluster, which can capture the unique relationships within each cluster. This approach can be particularly beneficial when dealing with complex data that may have non-linear relationships and/or interactions between the variables.
+
+
+```{r}
+residuals <- (data_df$Medal2016) - (data_df$Pred_2016_model_cluster)
+
+ggplot(data_df, aes(x = residuals)) +
+  geom_histogram(aes(y = ..density..),bins = 15)+geom_density()
+
+
+```
+Here in this Histogram we can see that residuals of our model are Normally distributed which is a evidence of good model.This can be still improved if we take care of outliers in the model.
+
+
+
+
+
+
+
